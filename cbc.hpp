@@ -9,13 +9,14 @@ private:
     cv::Mat image_cow_;
     cv::Mat mask_;
 
-    int camera_hight_ = 2350;
-    float fx_ = 424.977;
-    float fy_ = 424.977;
-    float cx_ = 420.337;
-    float cy_ = 241.23;
+    int camera_hight_;
+    double fx_;
+    double fy_;
+    double cx_;
+    double cy_;
     cv::Vec4f middle_line_;
     int cow_hight_;
+    int save_flag_;
 
     std::vector<std::vector<cv::Point>> FindBigestContour(cv::Mat src, int &index);
     double CowHeight(const cv::Mat _image, cv::Point &_p);
@@ -33,4 +34,7 @@ public:
     CBC();
     ~CBC();
     void SetDepth(const cv::Mat _image);
+    int SetCamera(double _camera_hight, double _fx, double _fy, double _cx, double _cy);
+    int SetSaveFlag(int _flag);
+    int ComputerHVLR(const cv::Mat &_image, double &_H, double &_VL, double &_VR);
 };

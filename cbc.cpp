@@ -1,12 +1,18 @@
-
+#include "log.h"
 #include "cbc.hpp"
 using namespace cv;
 #include <opencv2/ximgproc.hpp>
-
+#define SHOW_IMG
 cv::Mat IMG;
 
 CBC::CBC()
 {
+    camera_hight_ = 2350;
+    fx_ = 424.977;
+    fy_ = 424.977;
+    cx_ = 420.337;
+    cy_ = 241.23;
+    save_flag_ = 0;
 }
 
 CBC::~CBC()
@@ -90,7 +96,7 @@ void CBC::SetDepth(const cv::Mat _image)
 
 std::vector<std::vector<cv::Point>> CBC::FindBigestContour(cv::Mat src, int &index)
 {
-    int imax = 0;         //代表最大轮廓的序号
+    int imax = -1;        //代表最大轮廓的序号
     int imaxcontour = -1; //代表最大轮廓的大小
     std::vector<std::vector<cv::Point>> contours;
     findContours(src, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_NONE);
@@ -112,9 +118,7 @@ double CBC::CowHeight(const cv::Mat _image, cv::Point &_p)
 {
     cv::Mat bl = _image;
     // cv::erode(_image, bl, cv::Mat(15, 15, CV_8UC1, cv::Scalar(1)));
-    // cv::blur(_image, bl, cv::Size(11, 11));
-
-    bl.convertTo(IMG, CV_8UC1, 0.01);
+    cv::blur(_image, bl, cv::Size(11, 11));
 
     double A, B, C;
     GetLineABC(middle_line_, A, B, C);
@@ -122,7 +126,7 @@ double CBC::CowHeight(const cv::Mat _image, cv::Point &_p)
     int yl = -(A * xl + C) / B;
     int yr = -(A * xr + C) / B;
     std::vector<cv::Point> contour1, contour2;
-    int gap = 30;
+    int gap = 50;
     contour1.push_back(cv::Point(0, 0));
     contour1.push_back(cv::Point(image_depth_.cols - 1, 0));
     contour1.push_back(cv::Point(xr, yr - gap));
@@ -143,21 +147,21 @@ double CBC::CowHeight(const cv::Mat _image, cv::Point &_p)
     cv::Point min_xy, max_xy;
     cv::Mat cow_roi = mask_.clone();
     cv::drawContours(cow_roi, contours, -1, cv::Scalar(0), -1);
-    // cv::erode(cow_roi, cow_roi, cv::Mat(15, 15, CV_8UC1, cv::Scalar(1)));
+    cv::erode(cow_roi, cow_roi, cv::Mat(15, 15, CV_8UC1, cv::Scalar(1)));
 
     cv::minMaxLoc(bl, &min_pixel, &max_picel, &min_xy, &_p, cow_roi);
-    std::cout << min_pixel << " " << max_picel << "\n";
-    // _p = min_xy;
-    cv::circle(IMG, _p, 15, cv::Scalar(255), -1);
-    cv::imshow("img", IMG);
-    // cv::imshow("msk", cow_roi*255);
-    cv::waitKey();
-    // imshow("blbw", bl > (max_picel - 100));
-    // std::vector<cv::Point2d> mids = midArea(bl > (max_picel - 100));
-    // bl.convertTo(bl, CV_8UC1, 0.1);
 
-    // drawLine(bl, mids);
-    return max_picel;
+    _p = min_xy;
+
+    if (save_flag_ > 0)
+    {
+        cv::circle(IMG, _p, 11, cv::Scalar(0,255,255), 3);
+        // cv::drawContours(IMG, contours, -1, cv::Scalar(0), 3);
+        // cv::imshow("img", IMG);
+        // cv::waitKey();
+    }
+
+    return camera_hight_ - min_pixel;
 }
 
 //https://www.freesion.com/article/5903825212/
@@ -206,18 +210,22 @@ void CBC::SplitUD(const std::vector<cv::Point> &_contour, const cv::Vec4f &_line
             }
         }
     }
-    for (size_t i = 0; i < contour_d.size() - 1; i++)
+
+    if (save_flag_ > 0)
     {
-        cv::line(IMG, contour_d[i], contour_d[i + 1], cv::Scalar(0), 2, 8); //绘制最小外接矩形每条边
+        // for (size_t i = 0; i < contour_d.size() - 1; i++)
+        // {
+        //     cv::line(IMG, contour_d[i], contour_d[i + 1], cv::Scalar(0, 0, 0), 2, 8);
+        // }
+        // for (size_t i = 0; i < contour_u.size() - 1; i++)
+        // {
+        //     cv::line(IMG, contour_u[i], contour_u[i + 1], cv::Scalar(255, 255, 255), 2, 8);
+        // }
+        cv::circle(IMG, _U, 11, cv::Scalar(0,255,255), 3);
+        cv::circle(IMG, _D, 11, cv::Scalar(0,255,255), 3);
+        // imshow("img", IMG);
+        // waitKey();
     }
-    for (size_t i = 0; i < contour_u.size() - 1; i++)
-    {
-        cv::line(IMG, contour_u[i], contour_u[i + 1], cv::Scalar(255), 2, 8); //绘制最小外接矩形每条边
-    }
-    cv::circle(IMG, _U, 11, cv::Scalar(255), -1);
-    cv::circle(IMG, _D, 11, cv::Scalar(255), -1);
-    imshow("img", IMG);
-    waitKey();
 }
 
 void CBC::EraseRegion(const std::vector<cv::Point> &_contour, const cv::Vec4f &_line, cv::Point &_tail)
@@ -293,17 +301,8 @@ void CBC::EraseRegion(const cv::Point &_U, const cv::Point &_M, const cv::Point 
 
     std::vector<std::vector<cv::Point>> contours;
     contours.push_back(contour);
-    // cv::Mat cow_roi = Mat::ones(image_cow_.rows, image_cow_.cols, CV_16UC1);
 
-    // cv::drawContours(cow_roi, contours, 0, cv::Scalar(0), -1);
     cv::drawContours(mask_, contours, 0, cv::Scalar(0), -1);
-    // cv::imshow("roi", cow_roi);
-    // waitKey();
-    // image_cow_ = image_cow_.mul(cow_roi);
-    // image_depth_ = image_depth_.mul(cow_roi);
-    // cow_roi = Mat::zeros(image_cow_.rows, image_cow_.cols, CV_16UC1);
-    // cv::drawContours(cow_roi, contours, 0, cv::Scalar(1), -1);
-    // image_depth_ = image_depth_ + cow_roi;
 }
 void CBC::GetLineABC(cv::Vec4f _line, double &A, double &B, double &C)
 {
@@ -375,6 +374,24 @@ void CBC::GetCameraXYZ(int _x, int _y, int _p, double &_X, double &_Y, double &_
 
 void CBC::FillHole()
 {
+    int index = -1;
+    cv::Mat bw = mask_.clone();
+    std::vector<std::vector<cv::Point>> contours = FindBigestContour(bw, index);
+    cv::Mat cow_roi = Mat::zeros(image_cow_.rows, image_cow_.cols, CV_16UC1);
+    cv::drawContours(cow_roi, contours, index, cv::Scalar(1), -1);
+    if (save_flag_ > 0)
+    {
+
+        cv::drawContours(IMG, contours, index, cv::Scalar(255, 255, 255), 3);
+        // imshow("img", IMG);
+        // waitKey();
+    }
+    image_depth_ = image_depth_.mul(cow_roi);
+
+    cow_roi = Mat::ones(image_cow_.rows, image_cow_.cols, CV_16UC1);
+    cv::drawContours(cow_roi, contours, index, cv::Scalar(0), -1);
+    image_depth_ = image_depth_ + (cow_roi);
+
     for (size_t i = 0; i < image_depth_.rows; i++)
     {
         for (size_t j = 0; j < image_depth_.cols; j++)
@@ -403,6 +420,110 @@ void CBC::FillHole()
             } //if d
         }     //for j
     }         //for i
+}
+
+int CBC::SetCamera(double _camera_hight, double _fx, double _fy, double _cx, double _cy)
+{
+    LOGD("SetCamera");
+    camera_hight_ = _camera_hight * 1000;
+    fx_ = _fx;
+    fy_ = _fy;
+    cx_ = _cx;
+    cy_ = _cy;
+    return 0;
+}
+int CBC::SetSaveFlag(int _flag)
+{
+    save_flag_ = _flag;
+    return 0;
+}
+
+int CBC::ComputerHVLR(const cv::Mat &_image, double &_H, double &_VL, double &_VR)
+{
+    LOGD("enter ComputerHVLR");
+    image_depth_ = _image;
+    image_cow_ = camera_hight_ - image_depth_;
+
+    if (save_flag_ > 0)
+    {
+        Mat gray;
+        image_cow_.convertTo(gray, CV_8UC1, 0.1);
+        gray = (gray.mul((gray < 220) / 255) - 50) * 2;
+        applyColorMap(gray, IMG, 2);
+    }
+
+    int index = -1;
+    cv::Mat bw = (image_cow_ > 1200) & (image_cow_ < 2000);
+    std::vector<std::vector<cv::Point>> contours = FindBigestContour(bw, index);
+    if (index == -1)
+    {
+        LOGD("cant find cow");
+        return -1;
+    }
+    LOGD("contours size %d,index %d,index size %d", contours.size(), index, contours[index].size());
+
+    mask_ = Mat::zeros(image_cow_.rows, image_cow_.cols, CV_8UC1);
+    cv::drawContours(mask_, contours, index, cv::Scalar(1), -1);
+
+    cv::Point U, D;
+    cv::Vec4f line;
+    cv::fitLine(contours[index], line, DIST_L2, 0, 0.01, 0.01);
+    middle_line_ = line;
+    SplitUD(contours[index], line, U, D);
+
+    cv::Point mid_point = GetEquilateralTriangle(U, D);
+
+    if (save_flag_ > 0)
+    {
+
+        cv::circle(IMG, mid_point, 11, cv::Scalar(0,255,255), 3);
+        // imshow("img", IMG);
+        // waitKey();
+    }
+    EraseRegion(U, mid_point, D);
+
+    FillHole();
+
+    cv::Point top_point;
+    cow_hight_ = CowHeight(image_depth_, top_point);
+    _H = cow_hight_ * 0.001;
+
+    CameraCoor();
+
+    if (save_flag_ > 0)
+    {
+        cv::imwrite("HVLR.jpg", IMG);
+    }
+
+    return 0;
+
+    imshow("img1", IMG);
+    waitKey();
+    // image_depth_.convertTo(IMG, CV_8UC1, 0.1);
+    imshow("img1", IMG);
+    waitKey();
+    std::vector<cv::Point> mids;
+    mids.push_back(top_point);
+    mids.push_back(mid_point);
+    mids.push_back((U + D) / 2);
+    cv::fitLine(mids, line, DIST_L2, 0, 0.01, 0.01);
+
+    double cos_theta = line[0];
+    double sin_theta = line[1];
+    double x0 = line[2], y0 = line[3];
+
+    double k = sin_theta / cos_theta;
+    double b = y0 - k * x0;
+
+    double x = 0;
+    double y = k * x + b;
+    x0 = _image.cols;
+    y0 = k * x0 + b;
+
+    cv::line(IMG, Point(x0, y0), Point(x, y), cv::Scalar(255), 1);
+    cv::imshow("img", IMG);
+    cv::waitKey();
+    return 0;
 }
 std::vector<cv::Point2d> midArea(const cv::Mat _image)
 {
