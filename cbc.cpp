@@ -114,9 +114,9 @@ std::vector<std::vector<cv::Point>> CBC::FindBigestContour(cv::Mat src, int &ind
     return contours;
 }
 
-double CBC::CowHeight(const cv::Mat _image, cv::Point &_p)
+double CBC::CowHeight(const cv::Mat &_image, cv::Point &_p)
 {
-    cv::Mat bl = _image;
+    cv::Mat bl;
     // cv::erode(_image, bl, cv::Mat(15, 15, CV_8UC1, cv::Scalar(1)));
     cv::blur(_image, bl, cv::Size(11, 11));
 
@@ -155,7 +155,7 @@ double CBC::CowHeight(const cv::Mat _image, cv::Point &_p)
 
     if (save_flag_ > 0)
     {
-        cv::circle(IMG, _p, 11, cv::Scalar(0,255,255), 3);
+        cv::circle(IMG, _p, 11, cv::Scalar(0, 0, 0), 3);
         // cv::drawContours(IMG, contours, -1, cv::Scalar(0), 3);
         // cv::imshow("img", IMG);
         // cv::waitKey();
@@ -221,8 +221,8 @@ void CBC::SplitUD(const std::vector<cv::Point> &_contour, const cv::Vec4f &_line
         // {
         //     cv::line(IMG, contour_u[i], contour_u[i + 1], cv::Scalar(255, 255, 255), 2, 8);
         // }
-        cv::circle(IMG, _U, 11, cv::Scalar(0,255,255), 3);
-        cv::circle(IMG, _D, 11, cv::Scalar(0,255,255), 3);
+        cv::circle(IMG, _U, 11, cv::Scalar(0, 0, 0), 3);
+        cv::circle(IMG, _D, 11, cv::Scalar(0, 0, 0), 3);
         // imshow("img", IMG);
         // waitKey();
     }
@@ -377,6 +377,9 @@ void CBC::FillHole()
     int index = -1;
     cv::Mat bw = mask_.clone();
     std::vector<std::vector<cv::Point>> contours = FindBigestContour(bw, index);
+
+    cv::fitLine(contours[index], middle_line_, DIST_L2, 0, 0.01, 0.01);
+
     cv::Mat cow_roi = Mat::zeros(image_cow_.rows, image_cow_.cols, CV_16UC1);
     cv::drawContours(cow_roi, contours, index, cv::Scalar(1), -1);
     if (save_flag_ > 0)
@@ -448,7 +451,8 @@ int CBC::ComputerHVLR(const cv::Mat &_image, double &_H, double &_VL, double &_V
     {
         Mat gray;
         image_cow_.convertTo(gray, CV_8UC1, 0.1);
-        gray = (gray.mul((gray < 220) / 255) - 50) * 2;
+        // gray = (gray.mul((gray < 220) / 255) - 50) * 2;
+        cv::equalizeHist(gray, gray);
         applyColorMap(gray, IMG, 2);
     }
 
@@ -476,7 +480,7 @@ int CBC::ComputerHVLR(const cv::Mat &_image, double &_H, double &_VL, double &_V
     if (save_flag_ > 0)
     {
 
-        cv::circle(IMG, mid_point, 11, cv::Scalar(0,255,255), 3);
+        cv::circle(IMG, mid_point, 11, cv::Scalar(0, 0, 0), 3);
         // imshow("img", IMG);
         // waitKey();
     }
@@ -488,10 +492,14 @@ int CBC::ComputerHVLR(const cv::Mat &_image, double &_H, double &_VL, double &_V
     cow_hight_ = CowHeight(image_depth_, top_point);
     _H = cow_hight_ * 0.001;
 
-    CameraCoor();
-
+    // CameraCoor();
+    cv::Mat image_D, image_U;
+    SplitImageUD(middle_line_, image_depth_, image_D, image_U);
+    _VR = ComputerV(image_U);
+    _VL = ComputerV(image_D);
     if (save_flag_ > 0)
     {
+        drawLine(IMG, middle_line_);
         cv::imwrite("HVLR.jpg", IMG);
     }
 
@@ -506,8 +514,8 @@ int CBC::ComputerHVLR(const cv::Mat &_image, double &_H, double &_VL, double &_V
     mids.push_back(top_point);
     mids.push_back(mid_point);
     mids.push_back((U + D) / 2);
-    cv::fitLine(mids, line, DIST_L2, 0, 0.01, 0.01);
-
+    // cv::fitLine(mids, line, DIST_L2, 0, 0.01, 0.01);
+    line = middle_line_;
     double cos_theta = line[0];
     double sin_theta = line[1];
     double x0 = line[2], y0 = line[3];
@@ -524,6 +532,74 @@ int CBC::ComputerHVLR(const cv::Mat &_image, double &_H, double &_VL, double &_V
     cv::imshow("img", IMG);
     cv::waitKey();
     return 0;
+}
+
+double CBC::ComputerV(const cv::Mat &_image)
+{
+
+    double cowH = cow_hight_ * 0.001;
+    double cameraH = camera_hight_ * 0.001;
+    double V = 0;
+    for (size_t i = 0; i < _image.rows - 1; i++)
+    {
+        for (size_t j = 0; j < _image.cols - 1; j++)
+        {
+
+            int a = _image.at<uint16_t>(i, j);
+            int b = _image.at<uint16_t>(i, j + 1);
+            int c = _image.at<uint16_t>(i + 1, j);
+            int d = _image.at<uint16_t>(i + 1, j + 1);
+            if (a > 1 && b > 1 && c > 1 && d > 1)
+            {
+                double Xa, Ya, Za;
+                double Xb, Yb, Zb;
+                double Xc, Yc, Zc;
+                double Xd, Yd, Zd;
+                GetCameraXYZ(j, i, a, Xa, Ya, Za);
+                GetCameraXYZ(j + 1, i, b, Xb, Yb, Zb);
+                GetCameraXYZ(j, i + 1, c, Xc, Yc, Zc);
+                GetCameraXYZ(j + 1, i + 1, d, Xd, Yd, Zd);
+
+                double L = abs(Xa - Xb);
+                double W = abs(Ya - Yc);
+                double H = abs(cowH - cameraH + (Za + Zb + Zc + Zd) / 4);
+                V += (L * W * H);
+            }
+        }
+    }
+
+    return V;
+}
+void CBC::SplitImageUD(const cv::Vec4f &_line, const cv::Mat &_image, cv::Mat &_image_U, cv::Mat &_image_D)
+{
+    double A, B, C;
+    GetLineABC(_line, A, B, C);
+    int xl = 0, xr = image_depth_.cols - 1;
+    int yl = -(A * xl + C) / B;
+    int yr = -(A * xr + C) / B;
+    std::vector<cv::Point> contour;
+
+    contour.push_back(cv::Point(0, 0));
+    contour.push_back(cv::Point(image_depth_.cols - 1, 0));
+    contour.push_back(cv::Point(xr, yr));
+    contour.push_back(cv::Point(xl, yl));
+    contour.push_back(cv::Point(0, 0));
+    std::vector<std::vector<cv::Point>> contours;
+    contours.push_back(contour);
+
+    cv::Mat cow_roi = Mat::zeros(_image.rows, _image.cols, CV_16UC1);
+    cv::drawContours(cow_roi, contours, -1, cv::Scalar(1), -1);
+    _image_U = _image.mul(cow_roi);
+
+    cow_roi = Mat::ones(_image.rows, _image.cols, CV_16UC1);
+    cv::drawContours(cow_roi, contours, -1, cv::Scalar(0), -1);
+    _image_D = _image.mul(cow_roi);
+
+    // _image_D.convertTo(_image_D, CV_8UC1, 0.1);
+    // _image_U.convertTo(_image_U, CV_8UC1, 0.1);
+    // cv::imshow("D", _image_D);
+    // cv::imshow("U", _image_U);
+    // cv::waitKey();
 }
 std::vector<cv::Point2d> midArea(const cv::Mat _image)
 {
@@ -580,14 +656,12 @@ double pot2line(const cv::Point2d pt0, const cv::Point2d pt1, const cv::Point2d 
     return dis;
 }
 
-void drawLine(cv::Mat &_image, std::vector<cv::Point2d> &_points)
+void CBC::drawLine(cv::Mat &_image, const cv::Vec4f &_line)
 {
-    cv::Vec4f line;
-    cv::fitLine(_points, line, DIST_L2, 0, 0.01, 0.01);
 
-    double cos_theta = line[0];
-    double sin_theta = line[1];
-    double x0 = line[2], y0 = line[3];
+    double cos_theta = _line[0];
+    double sin_theta = _line[1];
+    double x0 = _line[2], y0 = _line[3];
 
     double k = sin_theta / cos_theta;
     double b = y0 - k * x0;
@@ -597,7 +671,6 @@ void drawLine(cv::Mat &_image, std::vector<cv::Point2d> &_points)
     x0 = _image.cols;
     y0 = k * x0 + b;
 
-    cv::line(IMG, Point(x0, y0), Point(x, y), cv::Scalar(255), 1);
-    cv::imshow("img", IMG);
-    cv::waitKey();
+    cv::line(_image, Point(x0, y0), Point(x, y), cv::Scalar(255, 0, 0), 1); // cv::imshow("img", _image);
+    // cv::waitKey();
 }

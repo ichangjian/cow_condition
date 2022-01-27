@@ -19,7 +19,7 @@ private:
     int save_flag_;
 
     std::vector<std::vector<cv::Point>> FindBigestContour(cv::Mat src, int &index);
-    double CowHeight(const cv::Mat _image, cv::Point &_p);
+    double CowHeight(const cv::Mat &_image, cv::Point &_p);
     cv::Point GetEquilateralTriangle(cv::Point &_U, cv::Point &_D);
     void SplitUD(const std::vector<cv::Point> &_contour, const cv::Vec4f &_line, cv::Point &_U, cv::Point &_D);
     void GetLineABC(cv::Vec4f _line, double &A, double &B, double &C);
@@ -29,6 +29,9 @@ private:
     void CameraCoor();
     void FillHole();
     void GetCameraXYZ(int _x, int _y, int _p, double &_X, double &_Y, double &_Z);
+    double ComputerV(const cv::Mat &_image);
+    void SplitImageUD(const cv::Vec4f &_line, const cv::Mat &_image, cv::Mat &_image_U, cv::Mat &_image_D);
+    void drawLine(cv::Mat &_image, const cv::Vec4f &_line);
 
 public:
     CBC();
