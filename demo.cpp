@@ -1,6 +1,7 @@
 #include "cow_condition.h"
 #include <opencv2/opencv.hpp>
-
+#include <time.h>
+#include <fstream>
 using namespace std;
 using namespace cv;
 
@@ -11,7 +12,6 @@ int main(int argc, char **argv)
 
     if (0)
     {
-#include <fstream>
         std::ofstream obj;
         obj.open("dp.txt");
         for (size_t i = 0; i < image.rows; i++)
@@ -27,6 +27,8 @@ int main(int argc, char **argv)
 
         return 0;
     }
+
+    clock_t ST = clock();
     double camera_hight = 2.350;
     double fx = 424.977;
     double fy = 424.977;
@@ -39,6 +41,7 @@ int main(int argc, char **argv)
     double cow_VR = 0;
     cout << "=================\n";
     cbcGetValue(image.cols, image.rows, image.data, &cow_H, &cow_VL, &cow_VR);
+    std::cout << "time " << double(clock() - ST) / CLOCKS_PER_SEC << "\n";
     // getchar();
     cout << "cow_H" << cow_H << " cow_VL" << cow_VL << " cow_VR" << cow_VR << "\n";
     return 0;
