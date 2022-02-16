@@ -17,6 +17,9 @@ private:
     cv::Vec4f middle_line_;
     int cow_hight_;
     int save_flag_;
+    std::vector<cv::Point2f> interest_points_;
+    std::vector<double> VAS_U_;
+    std::vector<double> VAS_D_;
 
     std::vector<std::vector<cv::Point>> FindBigestContour(cv::Mat src, int &index);
     double CowHeight(const cv::Mat &_image, cv::Point &_p);
@@ -29,9 +32,10 @@ private:
     void CameraCoor();
     void FillHole();
     void GetCameraXYZ(int _x, int _y, int _p, double &_X, double &_Y, double &_Z);
-    double ComputerV(const cv::Mat &_image);
+    std::vector<double> ComputerVAS(const cv::Mat &_image);
     void SplitImageUD(const cv::Vec4f &_line, const cv::Mat &_image, cv::Mat &_image_U, cv::Mat &_image_D);
     void drawLine(cv::Mat &_image, const cv::Vec4f &_line);
+    cv::Point2f GetTailPosition(const std::vector<cv::Point> &_contour, const cv::Vec4f &_line, const cv::Point &_U, const cv::Point &_D);
 
 public:
     CBC();
@@ -40,4 +44,6 @@ public:
     int SetCamera(double _camera_hight, double _fx, double _fy, double _cx, double _cy);
     int SetSaveFlag(int _flag);
     int ComputerHVLR(const cv::Mat &_image, double &_H, double &_VL, double &_VR);
+    int ComputerAS(double &_A_U, double &_S_U, double &_A_D, double &_S_D);
+    int GetInterestPoint(cv::Point2f &_num1, cv::Point2f &_num2, cv::Point2f &_num3, cv::Point2f &_num5, cv::Point2f &_num7);
 };

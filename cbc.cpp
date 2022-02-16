@@ -228,6 +228,37 @@ void CBC::SplitUD(const std::vector<cv::Point> &_contour, const cv::Vec4f &_line
     }
 }
 
+cv::Point2f CBC::GetTailPosition(const std::vector<cv::Point> &_contour, const cv::Vec4f &_line, const cv::Point &_U, const cv::Point &_D)
+{
+    int mid_x = (_U.x + _D.x) / 2;
+    double A, B, C;
+    GetLineABC(_line, A, B, C);
+
+    cv::Point tail;
+    double min_d = 1e10;
+    for (size_t i = 0; i < _contour.size(); i++)
+    {
+        if (_contour[i].x > mid_x)
+        {
+            // 距离公式为d = |A*x0 + B*y0 + C|/√(A^2 + B^2)
+            double dis = abs(A * _contour[i].x + B * _contour[i].y + C);
+            if (dis < min_d)
+            {
+                min_d = dis;
+                tail = _contour[i];
+            }
+        }
+    }
+    if (save_flag_ > 0)
+    {
+        cv::circle(IMG, tail, 11, cv::Scalar(0, 0, 0), 3);
+        // imshow("img", IMG);
+        // waitKey();
+    }
+
+    return tail;
+}
+
 void CBC::EraseRegion(const std::vector<cv::Point> &_contour, const cv::Vec4f &_line, cv::Point &_tail)
 {
     double A, B, C;
@@ -495,8 +526,19 @@ int CBC::ComputerHVLR(const cv::Mat &_image, double &_H, double &_VL, double &_V
     // CameraCoor();
     cv::Mat image_D, image_U;
     SplitImageUD(middle_line_, image_depth_, image_D, image_U);
-    _VR = ComputerV(image_U);
-    _VL = ComputerV(image_D);
+    std::vector<double> VAS_U, VAS_D;
+    VAS_U_ = ComputerVAS(image_U);
+    VAS_D_ = ComputerVAS(image_D);
+    _VR = VAS_U_[0];
+    _VL = VAS_D_[0];
+
+    cv::Point tail = GetTailPosition(contours[index], middle_line_, U, D);
+    interest_points_.push_back(U);
+    interest_points_.push_back(mid_point);
+    interest_points_.push_back(D);
+    interest_points_.push_back(top_point);
+    interest_points_.push_back(tail);
+
     if (save_flag_ > 0)
     {
         drawLine(IMG, middle_line_);
@@ -534,12 +576,29 @@ int CBC::ComputerHVLR(const cv::Mat &_image, double &_H, double &_VL, double &_V
     return 0;
 }
 
-double CBC::ComputerV(const cv::Mat &_image)
+int CBC::ComputerAS(double &_A_U, double &_S_U, double &_A_D, double &_S_D)
+{
+    if (VAS_U_.size() == 3 && VAS_D_.size() == 3)
+    {
+        _A_U = VAS_U_[1];
+        _S_U = VAS_U_[2];
+        _A_D = VAS_D_[1];
+        _S_D = VAS_D_[2];
+    }
+    else
+    {
+        return -1;
+    }
+    return 0;
+}
+
+std::vector<double> CBC::ComputerVAS(const cv::Mat &_image)
 {
 
     double cowH = cow_hight_ * 0.001;
     double cameraH = camera_hight_ * 0.001;
     double V = 0;
+    double A = 0;
     for (size_t i = 0; i < _image.rows - 1; i++)
     {
         for (size_t j = 0; j < _image.cols - 1; j++)
@@ -564,12 +623,35 @@ double CBC::ComputerV(const cv::Mat &_image)
                 double W = abs(Ya - Yc);
                 double H = abs(cowH - cameraH + (Za + Zb + Zc + Zd) / 4);
                 V += (L * W * H);
+                A += (L * W);
             }
         }
     }
-
-    return V;
+    std::vector<double> VAS;
+    VAS.push_back(V);
+    VAS.push_back(A);
+    double S = cv::sum((_image > 100) / 255)[0];
+    VAS.push_back(S);
+    return VAS;
 }
+
+int CBC::GetInterestPoint(cv::Point2f &_num1, cv::Point2f &_num2, cv::Point2f &_num3, cv::Point2f &_num5, cv::Point2f &_num7)
+{
+    if (interest_points_.size() == 5)
+    {
+        _num1 = interest_points_[0];
+        _num2 = interest_points_[1];
+        _num3 = interest_points_[2];
+        _num5 = interest_points_[3];
+        _num7 = interest_points_[4];
+    }
+    else
+    {
+        return -1;
+    }
+    return 0;
+}
+
 void CBC::SplitImageUD(const cv::Vec4f &_line, const cv::Mat &_image, cv::Mat &_image_U, cv::Mat &_image_D)
 {
     double A, B, C;
