@@ -477,7 +477,9 @@ int CBC::ComputerHVLR(const cv::Mat &_image, double &_H, double &_VL, double &_V
     LOGD("enter ComputerHVLR");
     image_depth_ = _image;
     image_cow_ = camera_hight_ - image_depth_;
-
+    interest_points_.clear();
+    VAS_U_.clear();
+    VAS_D_.clear();
     if (save_flag_ > 0)
     {
         Mat gray;
